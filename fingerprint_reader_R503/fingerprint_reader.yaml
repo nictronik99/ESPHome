@@ -172,11 +172,11 @@ fingerprint_grow:
         then:
           - homeassistant.tag_scanned: !lambda |-
               if ((finger_id >= 0) && (finger_id < 10)) {
-                return "impronte Nico";
+                return "impronte persona1";
               } else if ((finger_id >= 10) && (finger_id < 20)) {
-                return "impronte Ferio";
+                return "impronte persona2";
               } else if ((finger_id >= 20) && (finger_id < 30)) {
-                return "impronte Ciccio";
+                return "impronte persona3";
               } else {
                 return "impronte sconosciute";
               }
