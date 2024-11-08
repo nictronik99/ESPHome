@@ -1,0 +1,59 @@
+esphome:
+  name: deumidificatore
+  friendly_name: deumidificatore
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "<YOUR API KEY>"
+
+ota:
+  - platform: esphome
+    password: "<YOUR PASSWORD>"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Deumidificatore Fallback Hotspot"
+    password: "<YOUR PASSWORD>"
+
+captive_portal:
+
+
+
+output:
+  - platform: gpio
+    pin: GPIO2
+    id: output1
+    inverted: False
+
+button:
+  - platform: output
+    name: "On/Off button"
+    output: output1
+    duration: 200ms
+    icon: mdi:power
+    
+
+binary_sensor:
+  - platform: gpio
+    name: "power"
+    pin: GPIO3
+    device_class: running
+    filters: 
+      - invert: 
+      - delayed_on_off: 50ms
+          
+          
+    

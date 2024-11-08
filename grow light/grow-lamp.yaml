@@ -1,0 +1,317 @@
+esphome:
+  name: grow-lamp
+  friendly_name: grow-lamp
+
+esp8266:
+  board: esp01_1m
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "<YOUR API KEY>"
+
+ota:
+  - platform: esphome
+    password: "<YOUR PASSWORD>"
+
+wifi:
+  ssid: !secret wifi_ssid_extender
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Irrigatore-Smart"
+    password: "<YOUR PASSWORD>"
+
+captive_portal:
+
+# D3 luce fioritura
+# D2 luce vegetativa
+# D4 pulsante on off in sequenza veg on --> fior on --> veg & fior on --> veg & fior off
+# D7 dimmer up button
+# D6 dimmer down button 
+# D5 timer button 
+# RX timer 12h LED
+# D1 timer 18h LED
+
+
+#GPIO out PWM 
+output:
+  - platform: esp8266_pwm
+    pin: GPIO0 #D3
+    frequency: 1000 Hz
+    inverted: False
+    id: gpio_0
+
+  - platform: esp8266_pwm
+    pin: GPIO4 #D2
+    frequency: 1000 Hz
+    inverted: False
+    id: gpio_4
+
+
+# Define the LED output
+  - platform: gpio
+    pin: GPIO3 #RX
+    id: timer_12h_led
+
+
+  - platform: gpio
+    pin: GPIO5 #D1 
+    id: timer_18h_led
+
+light:
+  - platform: monochromatic
+    output: gpio_0
+    gamma_correct: 1
+    id: fioritura_light
+    default_transition_length: 100ms
+    name: "fioritura - rosso+blu"
+
+  - platform: monochromatic
+    output: gpio_4
+    gamma_correct: 1
+    id: vegetativa_light
+    default_transition_length: 100ms
+    name: "vegetativa - full specter"
+
+
+# Define the light component for the LED
+  - platform: binary
+    name: "Timer 12h LED"
+    output: timer_12h_led
+    id: timer_12h_led_light
+    internal: True
+
+
+  - platform: binary
+    name: "Timer 18h LED"
+    output: timer_18h_led
+    id: timer_18h_led_light
+    internal: True
+
+
+
+
+# pulsante on/off
+binary_sensor:
+  - platform: gpio
+    pin: 
+      number: GPIO2 #D4
+      inverted: True
+      mode:
+        input: true
+        pullup: true
+    filters:
+      - delayed_on: 10ms
+    device_class: opening
+    internal: true         #nascondi ad home assistant
+    name: "on/off button state"
+    on_press: 
+      then:
+        - if: 
+            condition: 
+              and:
+                - light.is_off: fioritura_light
+                - light.is_off: vegetativa_light
+            then: 
+              - light.turn_on: vegetativa_light
+    
+        - if: 
+            condition: 
+              and:
+                - light.is_off: fioritura_light
+                - light.is_on: vegetativa_light
+            then: 
+              - light.turn_on: fioritura_light
+              - light.turn_off: vegetativa_light
+
+        - if: 
+            condition: 
+              and:
+                - light.is_on: fioritura_light
+                - light.is_off: vegetativa_light
+            then: 
+              - light.turn_on: fioritura_light
+              - light.turn_on: vegetativa_light
+
+        - if: 
+            condition: 
+              and:
+                - light.is_on: fioritura_light
+                - light.is_on: vegetativa_light
+            then: 
+              - light.turn_off: fioritura_light
+              - light.turn_off: vegetativa_light
+
+
+             
+# dimmer up  button
+  - platform: gpio
+    pin: 
+      number: GPIO13 #D7
+      inverted: True
+      mode:
+        input: true
+        pullup: true
+    filters:
+      - delayed_on: 10ms
+    device_class: opening
+    internal: true
+    name: "dimmer-up  button state"
+    on_press: 
+      then:
+        - if:
+            condition:
+              - light.is_on: vegetativa_light
+            then:
+              - light.dim_relative:
+                  id: vegetativa_light
+                  relative_brightness: 5%
+                  brightness_limits:
+                      max_brightness: 100%
+
+        - if:
+            condition:
+              - light.is_on: fioritura_light
+            then:
+              - light.dim_relative:
+                  id: fioritura_light
+                  relative_brightness: 5%
+                  brightness_limits:
+                      max_brightness: 100%
+
+
+# dimmer down  button 
+  - platform: gpio
+    pin: 
+      number: GPIO12 #D6
+      inverted: True
+      mode:
+        input: true
+        pullup: true
+    filters:
+      - delayed_on: 10ms
+    device_class: opening
+    internal: true
+    name: "dimmer-down button state"
+    on_press: 
+      then:
+        - if:
+            condition:
+              - light.is_on: vegetativa_light
+            then:
+              - light.dim_relative:
+                  id: vegetativa_light
+                  relative_brightness: -5%
+                  brightness_limits:
+                      max_brightness: 100%
+
+        - if:
+            condition:
+              - light.is_on: fioritura_light
+            then:
+              - light.dim_relative:
+                  id: fioritura_light
+                  relative_brightness: -5%
+                  brightness_limits:
+                      max_brightness: 100%
+                    
+
+
+
+# timer button
+  - platform: gpio
+    pin: 
+      number: GPIO14 #D5
+      inverted: True
+      mode:
+        input: true
+        pullup: true
+    filters:
+      - delayed_on: 100ms
+    device_class: opening
+    internal: true
+    name: "timer button state"
+
+    on_press:
+      then:
+        - if:
+            condition:         #se una delle luci è accesa e nessun timer è attivo allora accendi timer 18h
+              and:
+                - not:
+                    script.is_running: start_timer_12h
+                - not:
+                   script.is_running: start_timer_18h
+                    
+                - or: 
+                    - light.is_on: fioritura_light
+                    - light.is_on: vegetativa_light
+
+
+
+
+            then:
+              - script.execute: start_timer_18h
+              - light.turn_on: timer_18h_led_light
+            else: 
+              - if:                # se una delle luci è accesa ed è iin esecuzione il timer di 18h, fermalo ed avvia quello da 12h
+                  condition:
+                    and:
+                      - script.is_running: start_timer_18h
+
+                      - not:
+                          script.is_running: start_timer_12h
+
+                      - or:
+                        - light.is_on: fioritura_light
+                        - light.is_on: vegetativa_light
+
+                  then:
+                    - script.stop: start_timer_18h
+                    - script.execute: start_timer_12h
+                    - light.turn_off: timer_18h_led_light
+                    - light.turn_on: timer_12h_led_light
+                  else: 
+                    - if:             # se una delle luci è accesa ed è in esecuzione il timer di 12h, fermalo
+                        condition:
+                          and:
+                            - script.is_running: start_timer_12h
+
+                            - not:
+                                script.is_running: start_timer_18h
+                    
+                            - or: 
+                              - light.is_on: fioritura_light
+                              - light.is_on: vegetativa_light
+
+
+                        then:
+                          - script.stop: start_timer_12h
+                          - light.turn_off: timer_12h_led_light
+
+
+
+script:
+  - id: start_timer_12h
+    then:
+      - delay: 12h
+      - light.turn_off: vegetativa_light
+      - light.turn_off: fioritura_light
+      - light.turn_off: timer_12h_led_light
+
+
+  - id: start_timer_18h
+    then:
+      - delay: 18h
+      - light.turn_off: vegetativa_light
+      - light.turn_off: fioritura_light
+      - light.turn_off: timer_18h_led_light
+
+
+  
+  
+      
